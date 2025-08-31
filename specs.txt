@@ -1,0 +1,85 @@
+----- 32 bit register-based VM -----
+
+6 4 byte int registers:
+ - ax (accumulator/returns)
+ - bx
+ - cx
+ - dx
+ - sp (stack ptr, inaccessible)
+ - bp (base ptr, inaccessible)
+ - ip (inaccessible)
+
+3 4 byte float registers:
+ - fax (accumulator/returns)
+ - fbx
+ - fcx
+
+Flags:
+ - Zero
+ - Sign
+ - Carry
+
+Calling Convention:
+ - First 3 arguments in registers in order: (bx, cx, dx) OR (fax, fbx, fcx) depending on type
+ - Remaining arguments pushed to stack
+
+--- Instruction Layout ---
+
+INSTRUCTION (1 BYTE) + REG/DATA (1/4 BYTE) + REG/DATA (1/4 BYTE OPTIONAL)
+
+--- ISA ---
+
+load    reg,    reg         ; load from address stored in second regiser
+loads   reg,    offset      ; load from base pointer offset
+loadc   reg,    const
+store   reg,    reg         ; store in address stored in second register
+stores  reg,    offset      ; store in base pointer offset
+
+copy    reg,    reg         ; if reg is int/float -> float/int, cast will be performed
+
+add     reg,    reg
+sub     reg,    reg
+mul     reg,    reg
+div     reg,    reg
+iadd    reg,    reg
+isub    reg,    reg
+imul    reg,    reg
+idiv    reg,    reg
+shl     reg,    reg
+shr     reg,    reg
+
+fadd    reg,    reg
+fsub    reg,    reg
+fmul    reg,    reg
+fdiv    reg,    reg
+
+cmp     reg,    reg         ; sets zero flag if same value, sign flag otherwise
+cmpi    reg,    reg         ; cmp but signed
+cmpf    reg,    reg         ; cmp but floating point
+
+push    reg
+pop     reg
+
+call    instr
+ret
+
+syscall id
+
+stop
+
+jmp     instr
+jmpz    instr
+jmps    instr
+jmpc    instr
+
+--- System Calls ---
+
+window(int width, int height)               ; creates a window, returns pointer to window memory
+
+malloc(int bytes)                           ; allocates bytes on heap, returns pointer
+free(void* ptr)                             ; frees allocated heap memory
+
+memset(void* ptr, int bytes, int value)     ; sets region of memory to value (uses first byte of int)
+memcpy(void* dest, void* src, int bytes)    ; copies region of memory
+
+wait(int ms)                                ; suspends program for milliseconds
