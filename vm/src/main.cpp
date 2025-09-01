@@ -5,33 +5,11 @@
 
 #include <SDL.h>
 
+#include "ISA.hpp"
+
 #define MACHINE_STACK_SIZE 2 * 1024 * 1024
 
 #define PRINT_DEBUG 1
-
-enum class MachineInstruction
-{
-    LOAD, LOADS, LOADC,
-    STORE, STORES,
-
-    COPY,
-
-    ADD, SUB, MUL, DIV,
-    IADD, ISUB, IMUL, IDIV,
-    SHL, SHR,
-
-    FADD, FSUB, FMUL, FDIV,
-
-    CMP, CMPI, CMPF,
-
-    PUSH, POP,
-    CALL, RET,
-    SYSCALL,
-
-    STOP,
-
-    JMP, JMPZ, JMPS, JMPC
-};
 
 class VirtualMachine
 {
@@ -99,12 +77,17 @@ private:
         return nullptr;
     }
 
+    void dispatch_syscall(uint8_t id)
+    {
+
+    }
+
     void process_instruction()
     {
-        MachineInstruction instruction = static_cast<MachineInstruction>(program[reg_instruction_ptr]);
+        uint8_t instruction = program[reg_instruction_ptr];
         switch (instruction)
         {
-            case MachineInstruction::LOAD:
+            case INSTR_LOAD:
             {
                 uint8_t reg_id = program[reg_instruction_ptr + 1];
                 uint8_t addr_reg_id = program[reg_instruction_ptr + 2];
@@ -117,10 +100,10 @@ private:
 
                 break;
             }
-            case MachineInstruction::LOADS:
+            case INSTR_LOADS:
             {
                 uint8_t reg_id = program[reg_instruction_ptr + 1];
-                uint32_t offset = *(uint32_t*)&program[reg_instruction_ptr + 2];
+                int32_t offset = *(int32_t*)&program[reg_instruction_ptr + 2];
                 memcpy(get_register(reg_id), &memory[reg_base_ptr + offset], 4);
                 reg_instruction_ptr += 6;
 
@@ -130,7 +113,7 @@ private:
 
                 break;
             }
-            case MachineInstruction::LOADC:
+            case INSTR_LOADC:
             {
                 uint8_t reg_id = program[reg_instruction_ptr + 1];
                 uint32_t value = *(uint32_t*)&program[reg_instruction_ptr + 2];
@@ -143,7 +126,7 @@ private:
 
                 break;
             }
-            case MachineInstruction::STORE:
+            case INSTR_STORE:
             {
                 uint8_t reg_id = program[reg_instruction_ptr + 1];
                 uint8_t addr_reg_id = program[reg_instruction_ptr + 2];
@@ -157,10 +140,10 @@ private:
 
                 break;
             }
-            case MachineInstruction::STORES:
+            case INSTR_STORES:
             {
                 uint8_t reg_id = program[reg_instruction_ptr + 1];
-                uint32_t addr = reg_base_ptr + *(uint32_t*)&program[reg_instruction_ptr + 2];
+                uint32_t addr = reg_base_ptr + *(int32_t*)&program[reg_instruction_ptr + 2];
                 memcpy(&memory[addr], get_register(reg_id), 4);
                 reg_instruction_ptr += 6;
 
@@ -170,7 +153,7 @@ private:
 
                 break;
             }
-            case MachineInstruction::COPY:
+            case INSTR_COPY:
             {
                 uint8_t reg_src_id = program[reg_instruction_ptr + 1];
                 uint8_t reg_dest_id = program[reg_instruction_ptr + 2];
@@ -208,7 +191,7 @@ private:
 
                 break;
             }
-            case MachineInstruction::ADD:
+            case INSTR_ADD:
             {
                 uint8_t reg_a_id = program[reg_instruction_ptr + 1];
                 uint8_t reg_b_id = program[reg_instruction_ptr + 2];
@@ -223,7 +206,7 @@ private:
 
                 break;
             }
-            case MachineInstruction::SUB:
+            case INSTR_SUB:
             {
                 uint8_t reg_a_id = program[reg_instruction_ptr + 1];
                 uint8_t reg_b_id = program[reg_instruction_ptr + 2];
@@ -238,7 +221,7 @@ private:
 
                 break;
             }
-            case MachineInstruction::MUL:
+            case INSTR_MUL:
             {
                 uint8_t reg_a_id = program[reg_instruction_ptr + 1];
                 uint8_t reg_b_id = program[reg_instruction_ptr + 2];
@@ -253,7 +236,7 @@ private:
 
                 break;
             }
-            case MachineInstruction::DIV:
+            case INSTR_DIV:
             {
                 uint8_t reg_a_id = program[reg_instruction_ptr + 1];
                 uint8_t reg_b_id = program[reg_instruction_ptr + 2];
@@ -268,87 +251,112 @@ private:
 
                 break;
             }
-            case MachineInstruction::IADD:
+            case INSTR_IDIV:
             {
+                uint8_t reg_a_id = program[reg_instruction_ptr + 1];
+                uint8_t reg_b_id = program[reg_instruction_ptr + 2];
+                int32_t result = *(int32_t*)get_register(reg_a_id) / *(int32_t*)get_register(reg_b_id);
+                memcpy(&reg_a, &result, 4);
+
+                reg_instruction_ptr += 3;
+
                 #ifdef PRINT_DEBUG
-                std::cout << "INSTRUCTION: IADD\n";
+                std::cout << "INSTRUCTION: IDIV reg " << (int)reg_a_id << " by reg " << (int)reg_b_id << " (" << result << ")\n";
                 #endif
 
                 break;
             }
-            case MachineInstruction::ISUB:
+            case INSTR_SHL:
             {
-                #ifdef PRINT_DEBUG
-                std::cout << "INSTRUCTION: ISUB\n";
-                #endif
+                uint8_t reg_a_id = program[reg_instruction_ptr + 1];
+                uint8_t reg_b_id = program[reg_instruction_ptr + 2];
+                uint32_t result = *(uint32_t*)get_register(reg_a_id) << *(uint32_t*)get_register(reg_b_id);
+                reg_a = result;
 
-                break;
-            }
-            case MachineInstruction::IMUL:
-            {
-                #ifdef PRINT_DEBUG
-                std::cout << "INSTRUCTION: IMUL\n";
-                #endif
-
-                break;
-            }
-            case MachineInstruction::IDIV:
-            {
-                #ifdef PRINT_DEBUG
-                std::cout << "INSTRUCTION: IDIV\n";
-                #endif
-
-                break;
-            }
-            case MachineInstruction::SHL:
-            {
+                reg_instruction_ptr += 3;
+                
                 #ifdef PRINT_DEBUG
                 std::cout << "INSTRUCTION: SHL\n";
                 #endif
 
                 break;
             }
-            case MachineInstruction::SHR:
+            case INSTR_SHR:
             {
+                uint8_t reg_a_id = program[reg_instruction_ptr + 1];
+                uint8_t reg_b_id = program[reg_instruction_ptr + 2];
+                uint32_t result = *(uint32_t*)get_register(reg_a_id) >> *(uint32_t*)get_register(reg_b_id);
+                reg_a = result;
+
+                reg_instruction_ptr += 3;
+
                 #ifdef PRINT_DEBUG
                 std::cout << "INSTRUCTION: SHR\n";
                 #endif
 
                 break;
             }
-            case MachineInstruction::FADD:
+            case INSTR_FADD:
             {
+                uint8_t reg_a_id = program[reg_instruction_ptr + 1];
+                uint8_t reg_b_id = program[reg_instruction_ptr + 2];
+                float result = *(float*)get_register(reg_a_id) + *(float*)get_register(reg_b_id);
+                reg_fa = result;
+
+                reg_instruction_ptr += 3;
+
                 #ifdef PRINT_DEBUG
                 std::cout << "INSTRUCTION: FADD\n";
                 #endif
 
                 break;
             }
-            case MachineInstruction::FSUB:
+            case INSTR_FSUB:
             {
+                uint8_t reg_a_id = program[reg_instruction_ptr + 1];
+                uint8_t reg_b_id = program[reg_instruction_ptr + 2];
+                float result = *(float*)get_register(reg_a_id) - *(float*)get_register(reg_b_id);
+                reg_fa = result;
+
+                reg_instruction_ptr += 3;
+
                 #ifdef PRINT_DEBUG
                 std::cout << "INSTRUCTION: FSUB\n";
                 #endif
 
                 break;
             }
-            case MachineInstruction::FMUL:
+            case INSTR_FMUL:
             {
+                uint8_t reg_a_id = program[reg_instruction_ptr + 1];
+                uint8_t reg_b_id = program[reg_instruction_ptr + 2];
+                float result = *(float*)get_register(reg_a_id) * *(float*)get_register(reg_b_id);
+                reg_fa = result;
+
+                reg_instruction_ptr += 3;
+                
                 #ifdef PRINT_DEBUG
                 std::cout << "INSTRUCTION: FMUL\n";
                 #endif
 
                 break;
             }
-            case MachineInstruction::FDIV:
+            case INSTR_FDIV:
             {
+                uint8_t reg_a_id = program[reg_instruction_ptr + 1];
+                uint8_t reg_b_id = program[reg_instruction_ptr + 2];
+                float result = *(float*)get_register(reg_a_id) / *(float*)get_register(reg_b_id);
+                reg_fa = result;
+
+                reg_instruction_ptr += 3;
+
                 #ifdef PRINT_DEBUG
                 std::cout << "INSTRUCTION: FDIV\n";
                 #endif
 
                 break;
             }
-            case MachineInstruction::CMP:
+            case INSTR_CMP:
             {
                 reset_flags();
 
@@ -372,55 +380,141 @@ private:
 
                 break;
             }
-            case MachineInstruction::PUSH:
+            case INSTR_CMPI:
             {
+                reset_flags();
+
+                int32_t reg_a_value = *(int32_t*)get_register(program[reg_instruction_ptr + 1]);
+                int32_t reg_b_value = *(int32_t*)get_register(program[reg_instruction_ptr + 2]);
+
+                if (reg_a_value == reg_b_value)
+                {
+                    flag_zero = 1;
+                }
+                else
+                {
+                    flag_sign = reg_a_value > reg_b_value ? 0 : 1;
+                }
+
+                reg_instruction_ptr += 3;
+                
+                #ifdef PRINT_DEBUG
+                std::cout << "INSTRUCTION: CMPI\n";
+                #endif
+
+                break;
+            }
+            case INSTR_CMPF:
+            {
+                reset_flags();
+
+                float reg_a_value = *(float*)get_register(program[reg_instruction_ptr + 1]);
+                float reg_b_value = *(float*)get_register(program[reg_instruction_ptr + 2]);
+
+                if (reg_a_value == reg_b_value)
+                {
+                    flag_zero = 1;
+                }
+                else
+                {
+                    flag_sign = reg_a_value > reg_b_value ? 0 : 1;
+                }
+
+                reg_instruction_ptr += 3;
+                
+                #ifdef PRINT_DEBUG
+                std::cout << "INSTRUCTION: CMPF\n";
+                #endif
+
+                break;
+            }
+            case INSTR_PUSH:
+            {
+                uint8_t reg_id = program[reg_instruction_ptr + 1];
+                memcpy(&memory[reg_stack_ptr], get_register(reg_id), 4);
+                reg_stack_ptr += 4;
+
+                reg_instruction_ptr += 2;
+
                 #ifdef PRINT_DEBUG
                 std::cout << "INSTRUCTION: PUSH\n";
                 #endif
 
                 break;
             }
-            case MachineInstruction::POP:
+            case INSTR_POP:
             {
+                uint8_t reg_id = program[reg_instruction_ptr + 1];
+                reg_stack_ptr -= 4;
+                memcpy(get_register(reg_id), &memory[reg_stack_ptr], 4);
+
+                reg_instruction_ptr += 2;
+
                 #ifdef PRINT_DEBUG
                 std::cout << "INSTRUCTION: POP\n";
                 #endif
 
                 break;
             }
-            case MachineInstruction::CALL:
+            case INSTR_CALL:
             {
+                uint32_t instr = *(uint32_t*)&program[reg_instruction_ptr + 1];
+                uint32_t reg_instruction_ptr_next = reg_instruction_ptr + 5;
+
+                memcpy(&memory[reg_stack_ptr], &reg_instruction_ptr_next, 4);
+                reg_stack_ptr += 4;
+
+                memcpy(&memory[reg_stack_ptr], &reg_base_ptr, 4);
+                reg_stack_ptr += 4;
+
+                reg_base_ptr = reg_stack_ptr - 8;
+
+                reg_instruction_ptr = instr;
+
                 #ifdef PRINT_DEBUG
                 std::cout << "INSTRUCTION: CALL\n";
                 #endif
 
                 break;
             }
-            case MachineInstruction::RET:
+            case INSTR_RET:
             {
+                reg_stack_ptr = reg_base_ptr;
+                reg_instruction_ptr = *(uint32_t*)&memory[reg_stack_ptr];
+                reg_base_ptr = *(uint32_t*)&memory[reg_stack_ptr + 4];
+
                 #ifdef PRINT_DEBUG
                 std::cout << "INSTRUCTION: RET\n";
                 #endif
 
                 break;
             }
-            case MachineInstruction::SYSCALL:
+            case INSTR_SYSCALL:
             {
+                uint8_t syscall_id = program[reg_instruction_ptr + 1];
+
+                dispatch_syscall(syscall_id);
+
+                reg_instruction_ptr += 2;
+
                 #ifdef PRINT_DEBUG
-                std::cout << "INSTRUCTION: SYSCALL\n";
+                std::cout << "INSTRUCTION: SYSCALL id " << syscall_id << "\n";
                 #endif
 
                 break;
             }
-            case MachineInstruction::STOP:
+            case INSTR_STOP:
             {
+                // End of program
+                reg_instruction_ptr = program.size();
+
                 #ifdef PRINT_DEBUG
                 std::cout << "INSTRUCTION: STOP\n";
                 #endif
 
                 break;
             }
-            case MachineInstruction::JMP:
+            case INSTR_JMP:
             {
                 uint32_t addr = *(uint32_t*)&program[reg_instruction_ptr + 1];
                 reg_instruction_ptr = addr;
@@ -431,7 +525,7 @@ private:
 
                 break;
             }
-            case MachineInstruction::JMPZ:
+            case INSTR_JMPZ:
             {
                 if (!flag_zero)
                 {
@@ -448,7 +542,7 @@ private:
 
                 break;
             }
-            case MachineInstruction::JMPS:
+            case INSTR_JMPS:
             {
                 if (!flag_sign)
                 {
@@ -465,10 +559,19 @@ private:
 
                 break;
             }
-            case MachineInstruction::JMPC:
+            case INSTR_JMPC:
             {
+                if (!flag_carry)
+                {
+                    reg_instruction_ptr += 5;
+                    break;
+                }
+
+                uint32_t addr = *(uint32_t*)&program[reg_instruction_ptr + 1];
+                reg_instruction_ptr = addr;
+
                 #ifdef PRINT_DEBUG
-                std::cout << "INSTRUCTION: JMPC\n";
+                std::cout << "INSTRUCTION: JMPS to addr " << addr << "\n";
                 #endif
 
                 break;

@@ -23,6 +23,9 @@ Calling Convention:
  - First 3 arguments in registers in order: (bx, cx, dx) OR (fax, fbx, fcx) depending on type
  - Remaining arguments pushed to stack
 
+On call, IP and BP (8 bytes total) will be pushed to stack.
+BP will then be set to SP - 8 bytes (important for stack access/parameters).
+
 --- Instruction Layout ---
 
 INSTRUCTION (1 BYTE) + REG/DATA (1/4 BYTE) + REG/DATA (1/4 BYTE OPTIONAL)
@@ -41,9 +44,6 @@ add     reg,    reg
 sub     reg,    reg
 mul     reg,    reg
 div     reg,    reg
-iadd    reg,    reg
-isub    reg,    reg
-imul    reg,    reg
 idiv    reg,    reg
 shl     reg,    reg
 shr     reg,    reg
