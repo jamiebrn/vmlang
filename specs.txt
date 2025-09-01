@@ -1,6 +1,6 @@
 ----- 32 bit register-based VM -----
 
-6 4 byte int registers:
+7 4 byte int registers:
  - ax (accumulator/returns)
  - bx
  - cx
@@ -81,5 +81,8 @@ free(void* ptr)                             ; frees allocated heap memory
 
 memset(void* ptr, int bytes, int value)     ; sets region of memory to value (uses first byte of int)
 memcpy(void* dest, void* src, int bytes)    ; copies region of memory
+
+printf(char* str)                           ; print a formatted string
+printreg(int reg_id)                        ; print a register's contents
 
 wait(int ms)                                ; suspends program for milliseconds

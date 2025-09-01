@@ -6,10 +6,11 @@
 #include <SDL.h>
 
 #include "ISA.hpp"
+#include "syscall.hpp"
 
 #define MACHINE_STACK_SIZE 2 * 1024 * 1024
 
-#define PRINT_DEBUG 1
+#define PRINT_DEBUG 0
 
 class VirtualMachine
 {
@@ -79,7 +80,21 @@ private:
 
     void dispatch_syscall(uint8_t id)
     {
-
+        switch (id)
+        {
+            case SYSCALL_ID_PRINTREG:
+            {
+                if (reg_b <= 3)
+                {
+                    printf("%d\n", *(uint32_t*)get_register(reg_b));
+                }
+                else
+                {
+                    printf("%f\n", *(float*)get_register(reg_b));
+                }
+                break;
+            }
+        }
     }
 
     void process_instruction()
@@ -94,7 +109,7 @@ private:
                 memcpy(get_register(reg_id), &memory[*(uint32_t*)get_register(addr_reg_id)], 4);
                 reg_instruction_ptr += 3;
 
-                #ifdef PRINT_DEBUG
+                #if PRINT_DEBUG
                 std::cout << "INSTRUCTION: LOAD " << *(uint32_t*)get_register(reg_id) << " into reg " << (int)reg_id << "\n";
                 #endif
 
@@ -107,7 +122,7 @@ private:
                 memcpy(get_register(reg_id), &memory[reg_base_ptr + offset], 4);
                 reg_instruction_ptr += 6;
 
-                #ifdef PRINT_DEBUG
+                #if PRINT_DEBUG
                 std::cout << "INSTRUCTION: LOADS " << *(uint32_t*)get_register(reg_id) << " into reg " << (int)reg_id << "\n";
                 #endif
 
@@ -120,7 +135,7 @@ private:
                 memcpy(get_register(reg_id), &value, 4);
                 reg_instruction_ptr += 6;
 
-                #ifdef PRINT_DEBUG
+                #if PRINT_DEBUG
                 std::cout << "INSTRUCTION: LOADC " << value << " into reg " << (int)reg_id << "\n";
                 #endif
 
@@ -134,7 +149,7 @@ private:
                 memcpy(&memory[addr], get_register(reg_id), 4);
                 reg_instruction_ptr += 3;
 
-                #ifdef PRINT_DEBUG
+                #if PRINT_DEBUG
                 std::cout << "INSTRUCTION: STORE " << *(uint32_t*)get_register(reg_id) << " in addr " << addr << "\n";
                 #endif
 
@@ -147,7 +162,7 @@ private:
                 memcpy(&memory[addr], get_register(reg_id), 4);
                 reg_instruction_ptr += 6;
 
-                #ifdef PRINT_DEBUG
+                #if PRINT_DEBUG
                 std::cout << "INSTRUCTION: STORES " << *(uint32_t*)get_register(reg_id) << " in stack addr " << addr << "\n";
                 #endif
 
@@ -185,7 +200,7 @@ private:
 
                 reg_instruction_ptr += 3;
 
-                #ifdef PRINT_DEBUG
+                #if PRINT_DEBUG
                 std::cout << "INSTRUCTION: COPY reg " << reg_src_id << " to reg " << reg_dest_id << "\n";
                 #endif
 
@@ -200,7 +215,7 @@ private:
 
                 reg_instruction_ptr += 3;
 
-                #ifdef PRINT_DEBUG
+                #if PRINT_DEBUG
                 std::cout << "INSTRUCTION: ADD reg " << (int)reg_a_id << " and reg " << (int)reg_b_id << " (" << result << ")\n";
                 #endif
 
@@ -215,7 +230,7 @@ private:
 
                 reg_instruction_ptr += 3;
 
-                #ifdef PRINT_DEBUG
+                #if PRINT_DEBUG
                 std::cout << "INSTRUCTION: SUB reg " << (int)reg_b_id << " from reg " << (int)reg_a_id << " (" << result << ")\n";
                 #endif
 
@@ -230,7 +245,7 @@ private:
 
                 reg_instruction_ptr += 3;
 
-                #ifdef PRINT_DEBUG
+                #if PRINT_DEBUG
                 std::cout << "INSTRUCTION: MUL reg " << (int)reg_a_id << " and reg " << (int)reg_b_id << " (" << result << ")\n";
                 #endif
 
@@ -245,7 +260,7 @@ private:
 
                 reg_instruction_ptr += 3;
 
-                #ifdef PRINT_DEBUG
+                #if PRINT_DEBUG
                 std::cout << "INSTRUCTION: DIV reg " << (int)reg_a_id << " by reg " << (int)reg_b_id << " (" << result << ")\n";
                 #endif
 
@@ -260,7 +275,7 @@ private:
 
                 reg_instruction_ptr += 3;
 
-                #ifdef PRINT_DEBUG
+                #if PRINT_DEBUG
                 std::cout << "INSTRUCTION: IDIV reg " << (int)reg_a_id << " by reg " << (int)reg_b_id << " (" << result << ")\n";
                 #endif
 
@@ -275,7 +290,7 @@ private:
 
                 reg_instruction_ptr += 3;
                 
-                #ifdef PRINT_DEBUG
+                #if PRINT_DEBUG
                 std::cout << "INSTRUCTION: SHL\n";
                 #endif
 
@@ -290,7 +305,7 @@ private:
 
                 reg_instruction_ptr += 3;
 
-                #ifdef PRINT_DEBUG
+                #if PRINT_DEBUG
                 std::cout << "INSTRUCTION: SHR\n";
                 #endif
 
@@ -305,7 +320,7 @@ private:
 
                 reg_instruction_ptr += 3;
 
-                #ifdef PRINT_DEBUG
+                #if PRINT_DEBUG
                 std::cout << "INSTRUCTION: FADD\n";
                 #endif
 
@@ -320,7 +335,7 @@ private:
 
                 reg_instruction_ptr += 3;
 
-                #ifdef PRINT_DEBUG
+                #if PRINT_DEBUG
                 std::cout << "INSTRUCTION: FSUB\n";
                 #endif
 
@@ -335,7 +350,7 @@ private:
 
                 reg_instruction_ptr += 3;
                 
-                #ifdef PRINT_DEBUG
+                #if PRINT_DEBUG
                 std::cout << "INSTRUCTION: FMUL\n";
                 #endif
 
@@ -350,7 +365,7 @@ private:
 
                 reg_instruction_ptr += 3;
 
-                #ifdef PRINT_DEBUG
+                #if PRINT_DEBUG
                 std::cout << "INSTRUCTION: FDIV\n";
                 #endif
 
@@ -374,7 +389,7 @@ private:
 
                 reg_instruction_ptr += 3;
                 
-                #ifdef PRINT_DEBUG
+                #if PRINT_DEBUG
                 std::cout << "INSTRUCTION: CMP\n";
                 #endif
 
@@ -398,7 +413,7 @@ private:
 
                 reg_instruction_ptr += 3;
                 
-                #ifdef PRINT_DEBUG
+                #if PRINT_DEBUG
                 std::cout << "INSTRUCTION: CMPI\n";
                 #endif
 
@@ -422,7 +437,7 @@ private:
 
                 reg_instruction_ptr += 3;
                 
-                #ifdef PRINT_DEBUG
+                #if PRINT_DEBUG
                 std::cout << "INSTRUCTION: CMPF\n";
                 #endif
 
@@ -436,7 +451,7 @@ private:
 
                 reg_instruction_ptr += 2;
 
-                #ifdef PRINT_DEBUG
+                #if PRINT_DEBUG
                 std::cout << "INSTRUCTION: PUSH\n";
                 #endif
 
@@ -450,7 +465,7 @@ private:
 
                 reg_instruction_ptr += 2;
 
-                #ifdef PRINT_DEBUG
+                #if PRINT_DEBUG
                 std::cout << "INSTRUCTION: POP\n";
                 #endif
 
@@ -471,7 +486,7 @@ private:
 
                 reg_instruction_ptr = instr;
 
-                #ifdef PRINT_DEBUG
+                #if PRINT_DEBUG
                 std::cout << "INSTRUCTION: CALL\n";
                 #endif
 
@@ -483,7 +498,7 @@ private:
                 reg_instruction_ptr = *(uint32_t*)&memory[reg_stack_ptr];
                 reg_base_ptr = *(uint32_t*)&memory[reg_stack_ptr + 4];
 
-                #ifdef PRINT_DEBUG
+                #if PRINT_DEBUG
                 std::cout << "INSTRUCTION: RET\n";
                 #endif
 
@@ -495,9 +510,9 @@ private:
 
                 dispatch_syscall(syscall_id);
 
-                reg_instruction_ptr += 2;
+                reg_instruction_ptr += 5;
 
-                #ifdef PRINT_DEBUG
+                #if PRINT_DEBUG
                 std::cout << "INSTRUCTION: SYSCALL id " << syscall_id << "\n";
                 #endif
 
@@ -508,7 +523,7 @@ private:
                 // End of program
                 reg_instruction_ptr = program.size();
 
-                #ifdef PRINT_DEBUG
+                #if PRINT_DEBUG
                 std::cout << "INSTRUCTION: STOP\n";
                 #endif
 
@@ -519,7 +534,7 @@ private:
                 uint32_t addr = *(uint32_t*)&program[reg_instruction_ptr + 1];
                 reg_instruction_ptr = addr;
 
-                #ifdef PRINT_DEBUG
+                #if PRINT_DEBUG
                 std::cout << "INSTRUCTION: JMP to addr " << addr << "\n";
                 #endif
 
@@ -536,7 +551,7 @@ private:
                 uint32_t addr = *(uint32_t*)&program[reg_instruction_ptr + 1];
                 reg_instruction_ptr = addr;
 
-                #ifdef PRINT_DEBUG
+                #if PRINT_DEBUG
                 std::cout << "INSTRUCTION: JMPZ to addr " << addr << "\n";
                 #endif
 
@@ -553,7 +568,7 @@ private:
                 uint32_t addr = *(uint32_t*)&program[reg_instruction_ptr + 1];
                 reg_instruction_ptr = addr;
 
-                #ifdef PRINT_DEBUG
+                #if PRINT_DEBUG
                 std::cout << "INSTRUCTION: JMPS to addr " << addr << "\n";
                 #endif
 
@@ -570,7 +585,7 @@ private:
                 uint32_t addr = *(uint32_t*)&program[reg_instruction_ptr + 1];
                 reg_instruction_ptr = addr;
 
-                #ifdef PRINT_DEBUG
+                #if PRINT_DEBUG
                 std::cout << "INSTRUCTION: JMPS to addr " << addr << "\n";
                 #endif
 
