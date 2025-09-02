@@ -39,6 +39,18 @@
 #define INSTR_SHR 0x39
 #define INSTR_SHR_STR "shr"
 
+#define INSTR_AND 0x26
+#define INSTR_AND_STR "and"
+
+#define INSTR_OR 0x27
+#define INSTR_OR_STR "or"
+
+#define INSTR_XOR 0x28
+#define INSTR_XOR_STR "xor"
+
+#define INSTR_NOT 0x29
+#define INSTR_NOT_STR "not"
+
 #define INSTR_FADD 0x40
 #define INSTR_FADD_STR "fadd"
 

@@ -2,6 +2,7 @@
 #include <vector>
 #include <fstream>
 #include <stdint.h>
+#include <thread>
 
 #include <SDL.h>
 
@@ -18,7 +19,7 @@ public:
     VirtualMachine()
     {
         memory.resize(MACHINE_STACK_SIZE * 10, 0);
-        heap_ptr = MACHINE_STACK_SIZE;
+        // heap_ptr = MACHINE_STACK_SIZE;
     }
 
     bool load_program(const std::string& filepath)
@@ -43,10 +44,16 @@ public:
 
     void run()
     {
-        reg_base_ptr = 0;
-        reg_stack_ptr = 0;
-        reg_instruction_ptr = 0;
+        reg_instruction_ptr = *(uint32_t*)&program[0];
         std::fill(memory.begin(), memory.end(), 0);
+        
+        uint32_t program_data_size = *(uint32_t*)&program[4];
+        
+        // Load program data
+        memcpy(&memory[0], &program[8], program_data_size);
+        
+        reg_base_ptr = program_data_size;
+        reg_stack_ptr = program_data_size;
 
         while (reg_instruction_ptr < program.size())
         {
@@ -92,6 +99,16 @@ private:
                 {
                     printf("%f\n", *(float*)get_register(reg_b));
                 }
+                break;
+            }
+            case SYSCALL_ID_WAIT:
+            {
+                std::this_thread::sleep_for(std::chrono::milliseconds(reg_b));
+                break;
+            }
+            case SYSCALL_ID_PRINTF:
+            {
+                printf((char*)&memory[*(uint32_t*)get_register(reg_b)]);
                 break;
             }
         }
@@ -201,7 +218,7 @@ private:
                 reg_instruction_ptr += 3;
 
                 #if PRINT_DEBUG
-                std::cout << "INSTRUCTION: COPY reg " << reg_src_id << " to reg " << reg_dest_id << "\n";
+                std::cout << "INSTRUCTION: COPY reg " << (int)reg_src_id << " to reg " << (int)reg_dest_id << "\n";
                 #endif
 
                 break;
@@ -311,6 +328,64 @@ private:
 
                 break;
             }
+            case INSTR_AND:
+            {
+                uint8_t reg_a_id = program[reg_instruction_ptr + 1];
+                uint8_t reg_b_id = program[reg_instruction_ptr + 2];
+                uint32_t result = *(uint32_t*)get_register(reg_a_id) & *(uint32_t*)get_register(reg_b_id);
+                reg_a = result;
+
+                reg_instruction_ptr += 3;
+
+                #if PRINT_DEBUG
+                std::cout << "INSTRUCTION: AND reg " << (int)reg_a_id << " and reg " << (int)reg_b_id << " (" << result << ")\n";
+                #endif
+
+                break;
+            }
+            case INSTR_OR:
+            {
+                uint8_t reg_a_id = program[reg_instruction_ptr + 1];
+                uint8_t reg_b_id = program[reg_instruction_ptr + 2];
+                uint32_t result = *(uint32_t*)get_register(reg_a_id) | *(uint32_t*)get_register(reg_b_id);
+                reg_a = result;
+
+                reg_instruction_ptr += 3;
+
+                #if PRINT_DEBUG
+                std::cout << "INSTRUCTION: OR reg " << (int)reg_b_id << " from reg " << (int)reg_a_id << " (" << result << ")\n";
+                #endif
+
+                break;
+            }
+            case INSTR_XOR:
+            {
+                uint8_t reg_a_id = program[reg_instruction_ptr + 1];
+                uint8_t reg_b_id = program[reg_instruction_ptr + 2];
+                uint32_t result = *(uint32_t*)get_register(reg_a_id) ^ *(uint32_t*)get_register(reg_b_id);
+                reg_a = result;
+
+                reg_instruction_ptr += 3;
+
+                #if PRINT_DEBUG
+                std::cout << "INSTRUCTION: XOR reg " << (int)reg_a_id << " and reg " << (int)reg_b_id << " (" << result << ")\n";
+                #endif
+
+                break;
+            }
+            case INSTR_NOT:
+            {
+                uint8_t reg_id = program[reg_instruction_ptr + 1];
+                reg_a = *(uint32_t*)get_register(reg_id);
+
+                reg_instruction_ptr += 2;
+
+                #if PRINT_DEBUG
+                std::cout << "INSTRUCTION: NOT reg " << (int)reg_id << " (" << reg_a << ")\n";
+                #endif
+
+                break;
+            }
             case INSTR_FADD:
             {
                 uint8_t reg_a_id = program[reg_instruction_ptr + 1];
@@ -390,7 +465,8 @@ private:
                 reg_instruction_ptr += 3;
                 
                 #if PRINT_DEBUG
-                std::cout << "INSTRUCTION: CMP\n";
+                std::cout << "INSTRUCTION: CMP " << reg_a_value << " to " << reg_b_value << " (" <<
+                    flag_zero << " " << flag_sign << ")\n";
                 #endif
 
                 break;
@@ -508,13 +584,13 @@ private:
             {
                 uint8_t syscall_id = program[reg_instruction_ptr + 1];
 
-                dispatch_syscall(syscall_id);
-
-                reg_instruction_ptr += 5;
-
                 #if PRINT_DEBUG
                 std::cout << "INSTRUCTION: SYSCALL id " << syscall_id << "\n";
                 #endif
+                
+                dispatch_syscall(syscall_id);
+
+                reg_instruction_ptr += 5;
 
                 break;
             }

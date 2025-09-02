@@ -19,6 +19,8 @@ Flags:
  - Sign
  - Carry
 
+Little endian
+
 Calling Convention:
  - First 3 arguments in registers in order: (bx, cx, dx) OR (fax, fbx, fcx) depending on type
  - Remaining arguments pushed to stack
@@ -32,30 +34,35 @@ INSTRUCTION (1 BYTE) + REG/DATA (1/4 BYTE) + REG/DATA (1/4 BYTE OPTIONAL)
 
 --- ISA ---
 
-load    reg,    reg         ; load from address stored in second regiser
-loads   reg,    offset      ; load from base pointer offset
-loadc   reg,    const
-store   reg,    reg         ; store in address stored in second register
-stores  reg,    offset      ; store in base pointer offset
+load    reg     reg         ; load from address stored in second regiser
+loads   reg     offset      ; load from base pointer offset
+loadc   reg     const
+store   reg     reg         ; store in address stored in second register
+stores  reg     offset      ; store in base pointer offset
 
-copy    reg,    reg         ; if reg is int/float -> float/int, cast will be performed
+copy    reg     reg         ; if reg is int/float -> float/int, cast will be performed
 
-add     reg,    reg
-sub     reg,    reg
-mul     reg,    reg
-div     reg,    reg
-idiv    reg,    reg
-shl     reg,    reg
-shr     reg,    reg
+add     reg     reg
+sub     reg     reg
+mul     reg     reg
+div     reg     reg
+idiv    reg     reg
+shl     reg     reg
+shr     reg     reg
 
-fadd    reg,    reg
-fsub    reg,    reg
-fmul    reg,    reg
-fdiv    reg,    reg
+and     reg     reg
+or      reg     reg
+xor     reg     reg
+not     reg
 
-cmp     reg,    reg         ; sets zero flag if same value, sign flag otherwise
-cmpi    reg,    reg         ; cmp but signed
-cmpf    reg,    reg         ; cmp but floating point
+fadd    reg     reg
+fsub    reg     reg
+fmul    reg     reg
+fdiv    reg     reg
+
+cmp     reg     reg         ; sets zero flag if same value, sign flag otherwise
+cmpi    reg     reg         ; cmp but signed
+cmpf    reg     reg         ; cmp but floating point
 
 push    reg
 pop     reg

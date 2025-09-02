@@ -17,6 +17,7 @@ static const std::unordered_map<std::string, uint8_t> instruction_name_map = {
     {INSTR_COPY_STR, INSTR_COPY},
     {INSTR_ADD_STR, INSTR_ADD}, {INSTR_SUB_STR, INSTR_SUB}, {INSTR_MUL_STR, INSTR_MUL}, {INSTR_DIV_STR, INSTR_DIV},
     {INSTR_IDIV_STR, INSTR_IDIV}, {INSTR_SHL_STR, INSTR_SHL}, {INSTR_SHR_STR, INSTR_SHR},
+    {INSTR_AND_STR, INSTR_AND}, {INSTR_OR_STR, INSTR_OR}, {INSTR_XOR_STR, INSTR_XOR}, {INSTR_NOT_STR, INSTR_NOT},
     {INSTR_FADD_STR, INSTR_FADD}, {INSTR_FSUB_STR, INSTR_FSUB}, {INSTR_FMUL_STR, INSTR_FMUL}, {INSTR_FDIV_STR, INSTR_FDIV},
     {INSTR_CMP_STR, INSTR_CMP}, {INSTR_CMPI_STR, INSTR_CMPI}, {INSTR_CMPF_STR, INSTR_CMPF},
     {INSTR_PUSH_STR, INSTR_PUSH}, {INSTR_POP_STR, INSTR_POP}, {INSTR_CALL_STR, INSTR_CALL}, {INSTR_RET_STR, INSTR_RET},
@@ -94,10 +95,17 @@ bool is_token_int_literal(const std::string& token, uint32_t& value)
 {
     if (token.length() < 1) return false;
 
+    bool negative = false;
     value = 0;
     for (int i = 0; i < token.length(); i++)
     {
         char c = token[i];
+
+        if (i == 0 && c == '-')
+        {
+            negative = true;
+            continue;
+        }
 
         if (c >= '0' && c <= '9')
         {
@@ -109,18 +117,37 @@ bool is_token_int_literal(const std::string& token, uint32_t& value)
         }
     }
 
+    if (negative)
+    {
+        value = -value;
+    }
+
     return true;
+}
+
+bool is_token_data_directive(const std::string& token)
+{
+    return token == "[data]";
+}
+
+bool is_token_program_directive(const std::string& token)
+{
+    return token == "[program]";
 }
 
 enum class TokenType
 {
     Unknown,
 
+    DataDirective,
+    ProgramDirective,
+
     Label,
     Instruction,
     Register,
     IntLiteral,
-    HexLiteral
+    HexLiteral,
+    StringLiteral
 };
 
 struct Token
@@ -134,7 +161,7 @@ struct Token
         uint32_t value;
     };
 
-    std::string label;
+    std::string text;
 
     int line;
 };
@@ -147,7 +174,7 @@ Token create_token(const std::string& text, int line)
     if (is_token_label(text))
     {
         token.type = TokenType::Label;
-        token.label = text.substr(1);
+        token.text = text.substr(1);
         std::cout << "LABEL TOKEN: " << text << "\n";
         return token;
     }
@@ -179,9 +206,24 @@ Token create_token(const std::string& text, int line)
         std::cout << "HEX LITERAL (" << token.value << ") TOKEN: " << text << "\n";
         return token;
     }
+    
+    if (is_token_data_directive(text))
+    {
+        token.type = TokenType::DataDirective;
+        std::cout << "DATA DIRECTIVE TOKEN\n";
+        return token;
+    }
+
+    if (is_token_program_directive(text))
+    {
+        token.type = TokenType::ProgramDirective;
+        std::cout << "PROGRAM DIRECTIVE TOKEN\n";
+        return token;
+    }
 
     token.type = TokenType::Unknown;
-    token.label = text;
+    token.text = text;
+    std::cout << "UNKNOWN TYPE TOKEN: " << text << "\n";
 
     return token;
 }
@@ -204,6 +246,8 @@ std::vector<Token> parse_tokens_from_file(std::string filepath)
 
     std::string token_buffer;
     bool parsing_comment = false;
+    bool parsing_string = false;
+    bool parsing_string_escape = false;
     int line = 1;
 
     for (int i = 0; i < file_buffer.size(); i++)
@@ -215,8 +259,35 @@ std::vector<Token> parse_tokens_from_file(std::string filepath)
             if (c == '\n') parsing_comment = false;
             continue;
         }
+        
+        if (parsing_string)
+        {
+            if (parsing_string_escape)
+            {
+                if (c == 'n') token_buffer += '\n';
+                if (c == 'r') token_buffer += '\r';
+                parsing_string_escape = false;
+                continue;
+            }
 
-        if (c == ' ' || c == ',' || c == '\n' || c == ';')
+            if (!parsing_string_escape && c == '"')
+            {
+                Token token;
+                token.type = TokenType::StringLiteral;
+                token.text = token_buffer;
+                token.line = line;
+                tokens.push_back(token);
+
+                std::cout << "STRING LITERAL TOKEN: " << token_buffer << "\n";
+                
+                token_buffer.clear();
+                parsing_string = false;
+                continue;
+            }
+
+            parsing_string_escape = false;
+        }
+        else if (c == ' ' || c == ',' || c == '\n' || c == ';')
         {
             if (token_buffer.size() > 0)
             {
@@ -235,13 +306,31 @@ std::vector<Token> parse_tokens_from_file(std::string filepath)
             continue;
         }
 
-        if (c >= '!' && c <= '~')
+        if (c >= '!' && c <= '~' || (c == ' ' && parsing_string))
         {
-            token_buffer += to_lower(c);
+            if (token_buffer.empty() && c == '"')
+            {
+                parsing_string = true;
+                continue;
+            }
+
+            if (parsing_string)
+            {
+                if (c == '\\')
+                {
+                    parsing_string_escape = true;
+                    continue;
+                }
+                token_buffer += c;
+            }
+            else
+            {
+                token_buffer += to_lower(c);
+            }
         }
     }
 
-    if (token_buffer.size() > 0)
+    if (!parsing_string && token_buffer.size() > 0)
     {
         tokens.push_back(create_token(token_buffer, line));
     }
@@ -256,7 +345,64 @@ int main(int argv, char** argc)
     std::vector<Token> tokens = parse_tokens_from_file(argc[1]);
 
     std::vector<uint8_t> bytecode(tokens.size() * 4, 0);
-    uint32_t bytecode_top_ptr = 0;
+
+    // 8 bytes for program start addr (4) and data size (4)
+    uint32_t bytecode_top_ptr = 8;
+
+    std::unordered_map<std::string, uint32_t> data_ptrs;
+
+    // Find any data blocks and store in bytecode
+    bool data_mode = false;
+    for (size_t token_idx = 0; token_idx < tokens.size(); token_idx++)
+    {
+        const Token& token = tokens[token_idx];
+
+        if (!data_mode)
+        {
+            if (token.type == TokenType::DataDirective)
+            {
+                data_mode = true;
+            }
+
+            continue;
+        }
+
+        switch (token.type)
+        {
+            case TokenType::ProgramDirective:
+            {
+                data_mode = false;
+                break;
+            }
+            case TokenType::Unknown:
+            {
+                if (data_ptrs.contains(token.text))
+                {
+                    std::cout << "ERROR: Found duplicate data label \"" << token.text << "\"\n";
+                    break;
+                }
+
+                // Program will be loaded in from 0 memory in VM, subtract header
+                data_ptrs[token.text] = bytecode_top_ptr - 8;
+                break;
+            }
+            case TokenType::StringLiteral:
+            {
+                memcpy(&bytecode[bytecode_top_ptr], token.text.c_str(), token.text.length() + 1);
+                bytecode_top_ptr += token.text.length() + 1;
+                break;
+            }
+            case TokenType::IntLiteral:
+            case TokenType::HexLiteral: // fallthrough
+            {
+                memcpy(&bytecode[bytecode_top_ptr], &token.value, 4);
+                bytecode_top_ptr += token.text.length() + 4;
+                break;
+            }
+        }
+    }
+
+    size_t data_size = bytecode_top_ptr - 8;
 
     std::unordered_map<std::string, uint32_t> label_ptrs;
     std::unordered_map<std::string, std::vector<uint32_t>> label_ref_ptrs;
@@ -268,25 +414,43 @@ int main(int argv, char** argc)
 
         if (token.type == TokenType::Label)
         {
-            if (label_ptrs.contains(token.label))
+            if (label_ptrs.contains(token.text))
             {
-                std::cout << "ERROR: Found duplicate label \"" << token.label << "\" on line " << token.line << "\n";
+                std::cout << "ERROR: Found duplicate label \"" << token.text << "\" on line " << token.line << "\n";
                 return 1;
             }
 
-            label_ptrs[token.label] = 0;
+            label_ptrs[token.text] = 0;
         }
     }
 
+    if (!label_ptrs.contains("main"))
+    {
+        std::cout << "ERROR: Program does not contain main (.main label) entry point\n";
+        return 1;
+    }
+
+    data_mode = false;
     for (size_t token_idx = 0; token_idx < tokens.size();)
     {
         const Token& token = tokens[token_idx];
+
+        if (data_mode)
+        {
+            if (token.type == TokenType::ProgramDirective)
+            {
+                data_mode = false;
+            }
+
+            token_idx++;
+            continue;
+        }
 
         switch (token.type)
         {
             case TokenType::Label:
             {
-                label_ptrs[token.label] = bytecode_top_ptr;
+                label_ptrs[token.text] = bytecode_top_ptr;
 
                 token_idx++;
                 break;
@@ -311,7 +475,7 @@ int main(int argv, char** argc)
             case TokenType::HexLiteral: // fallthrough
             {
                 memcpy(&bytecode[bytecode_top_ptr], &token.value, 4);
-
+                
                 bytecode_top_ptr += 4;
                 token_idx++;
                 break;
@@ -319,15 +483,29 @@ int main(int argv, char** argc)
             case TokenType::Unknown:
             {
                 // Test if label
-                if (!label_ptrs.contains(token.label))
+                if (label_ptrs.contains(token.text))
                 {
-                    std::cout << "\nERROR: Could not assemble program (UNKNOWN TOKEN : " << token.label << ")\n";
-                    return 1;
+                    label_ref_ptrs[token.text].push_back(bytecode_top_ptr);
+                    bytecode_top_ptr += 4;
+                    token_idx++;
+                    break;
                 }
-
-                label_ref_ptrs[token.label].push_back(bytecode_top_ptr);
-                bytecode_top_ptr += 4;
-                token_idx++;
+                
+                // Test if data ptr
+                if (data_ptrs.contains(token.text))
+                {
+                    memcpy(&bytecode[bytecode_top_ptr], &data_ptrs.at(token.text), 4);
+                    bytecode_top_ptr += 4;
+                    token_idx++;
+                    break;
+                }
+                
+                std::cout << "\nERROR: Could not assemble program (UNKNOWN TOKEN : " << token.text << ")\n";
+                return 1;
+            }
+            case TokenType::DataDirective:
+            {
+                data_mode = true;
                 break;
             }
         }
@@ -346,6 +524,10 @@ int main(int argv, char** argc)
             memcpy(&bytecode[ref], &label_ptr, 4);
         }
     }
+
+    // Store entry point
+    memcpy(&bytecode[0], &label_ptrs.at("main"), 4);
+    memcpy(&bytecode[4], &data_size, 4);
 
     std::ofstream out_file("out.vmex", std::ios::binary);
     for (uint32_t i = 0; i < bytecode_top_ptr; i++)
