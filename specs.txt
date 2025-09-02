@@ -81,15 +81,25 @@ jmpc    instr
 
 --- System Calls ---
 
-window(int width, int height)               ; creates a window, returns pointer to window memory
+window_create(int width, int height, char* title)           ; creates a window, returns window id
+window_close(int window_id)
+window_is_valid(int window_id)
+window_set_pixel(int window_id, int x, int y, int r, int g, int b)
+window_clear(int window_id, int r, int g, int b)
+window_update(int window_id)
 
-malloc(int bytes)                           ; allocates bytes on heap, returns pointer
-free(void* ptr)                             ; frees allocated heap memory
+; input handling, function correctly when a window is active
+window_get_mouse_x()
+window_get_mouse_y()
+window_get_key_state(int scancode)
 
-memset(void* ptr, int bytes, int value)     ; sets region of memory to value (uses first byte of int)
-memcpy(void* dest, void* src, int bytes)    ; copies region of memory
+malloc(int bytes)                                           ; allocates bytes on heap, returns pointer
+free(void* ptr)                                             ; frees allocated heap memory
 
-printf(char* str)                           ; print a formatted string
-printreg(int reg_id)                        ; print a register's contents
+memset(void* ptr, int bytes, int value)                     ; sets region of memory to value (uses first byte of int)
+memcpy(void* dest, void* src, int bytes)                    ; copies region of memory
 
-wait(int ms)                                ; suspends program for milliseconds
+printf(char* str)                                           ; print a formatted string
+printreg(int reg_id)                                        ; print a register's contents
+
+wait(int ms)                                                ; suspends program for milliseconds

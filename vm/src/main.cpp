@@ -13,6 +13,14 @@
 
 #define PRINT_DEBUG 0
 
+// TODO: Make endianness host platform agnostic (stop using memcpy)
+
+struct VirtualWindow
+{
+    SDL_Window* window;
+    SDL_Renderer* renderer;
+};
+
 class VirtualMachine
 {
 public:
@@ -24,7 +32,7 @@ public:
 
     bool load_program(const std::string& filepath)
     {
-        std::ifstream file(filepath);
+        std::ifstream file(filepath, std::ios::binary);
         
         if (!file.is_open())
         {
@@ -44,19 +52,60 @@ public:
 
     void run()
     {
-        reg_instruction_ptr = *(uint32_t*)&program[0];
+        uint32_t binary_isa_ver = *(uint32_t*)&program[0];
+        uint32_t binary_syscall_ver = *(uint32_t*)&program[4];
+
+        if (binary_isa_ver != ISA_version)
+        {
+            std::cout << "ERROR: Executable has different ISA version to runtime\n Executable ISA: " << binary_isa_ver <<
+                "\n Runtime ISA: " << ISA_version << "\n";
+            return;
+        }
+
+        if (binary_syscall_ver != SYSCALL_version)
+        {
+            std::cout << "WARNING: Executable has different syscall version to runtime\n Executable SYSCALL: " <<
+                binary_syscall_ver << "\n Runtime SYSCALL: " << SYSCALL_version << "\n";
+        }
+
+        reg_instruction_ptr = *(uint32_t*)&program[8];
         std::fill(memory.begin(), memory.end(), 0);
         
-        uint32_t program_data_size = *(uint32_t*)&program[4];
+        uint32_t program_data_size = *(uint32_t*)&program[12];
         
         // Load program data
-        memcpy(&memory[0], &program[8], program_data_size);
+        memcpy(&memory[0], &program[16], program_data_size);
         
         reg_base_ptr = program_data_size;
         reg_stack_ptr = program_data_size;
 
+        std::cout << "Data size: " << program_data_size << "   IP: " << reg_instruction_ptr << "\n";
+
         while (reg_instruction_ptr < program.size())
         {
+            SDL_Event event;
+            while (SDL_PollEvent(&event))
+            {
+                if (event.type == SDL_WINDOWEVENT)
+                {
+                    if (event.window.event == SDL_WINDOWEVENT_CLOSE)
+                    {
+                        // Find closed window
+                        for (int i = 0; i < windows.size(); i++)
+                        {
+                            if (SDL_GetWindowID(windows[i].window) == event.window.windowID)
+                            {
+                                SDL_DestroyRenderer(windows[i].renderer);
+                                SDL_DestroyWindow(windows[i].window);
+                                windows[i].renderer = nullptr;
+                                windows[i].window = nullptr;
+                                break;
+                            }
+                        }
+                    }
+                }
+            }
+
             process_instruction();
         }
     }
@@ -89,6 +138,11 @@ private:
     {
         switch (id)
         {
+            case SYSCALL_ID_WAIT:
+            {
+                std::this_thread::sleep_for(std::chrono::milliseconds(reg_b));
+                break;
+            }
             case SYSCALL_ID_PRINTREG:
             {
                 if (reg_b <= 3)
@@ -101,14 +155,74 @@ private:
                 }
                 break;
             }
-            case SYSCALL_ID_WAIT:
-            {
-                std::this_thread::sleep_for(std::chrono::milliseconds(reg_b));
-                break;
-            }
             case SYSCALL_ID_PRINTF:
             {
-                printf((char*)&memory[*(uint32_t*)get_register(reg_b)]);
+                printf((char*)&memory[reg_b]);
+                break;
+            }
+            case SYSCALL_ID_WINDOW_CREATE:
+            {
+                VirtualWindow window;
+                window.window = SDL_CreateWindow((char*)&memory[reg_d], SDL_WINDOWPOS_UNDEFINED, SDL_WINDOWPOS_UNDEFINED,
+                    reg_b, reg_c, 0);
+                
+                window.renderer = SDL_CreateRenderer(window.window, -1, 0);
+                
+                reg_a = windows.size();
+                windows.push_back(window);
+                break;
+            }
+            case SYSCALL_ID_WINDOW_CLOSE:
+            {
+                SDL_DestroyRenderer(windows[reg_b].renderer);
+                SDL_DestroyWindow(windows[reg_b].window);
+                windows[reg_b].renderer = nullptr;
+                windows[reg_b].window = nullptr;
+                break;
+            }
+            case SYSCALL_ID_WINDOW_IS_VALID:
+            {
+                reg_a = (windows.size() > reg_b && windows[reg_b].window) ? 1 : 0;
+                break;
+            }
+            case SYSCALL_ID_WINDOW_SET_PIXEL:
+            {
+                SDL_SetRenderDrawColor(windows[reg_b].renderer, memory[reg_stack_ptr - 12],
+                    memory[reg_stack_ptr - 8], memory[reg_stack_ptr - 4], 255);
+                SDL_RenderDrawPoint(windows[reg_b].renderer, reg_c, reg_d);
+                reg_stack_ptr -= 12;
+                break;
+            }
+            case SYSCALL_ID_WINDOW_CLEAR:
+            {
+                SDL_SetRenderDrawColor(windows[reg_b].renderer, reg_c, reg_d,
+                    memory[reg_stack_ptr - 4], 255);
+                SDL_RenderClear(windows[reg_b].renderer);
+                reg_stack_ptr -= 4;
+                break;
+            }
+            case SYSCALL_ID_WINDOW_UPDATE:
+            {
+                SDL_RenderPresent(windows[reg_b].renderer);
+                break;
+            }
+            case SYSCALL_ID_WINDOW_GET_MOUSE_X:
+            {
+                int mouse_x;
+                SDL_GetMouseState(&mouse_x, NULL);
+                reg_a = mouse_x;
+                break;
+            }
+            case SYSCALL_ID_WINDOW_GET_MOUSE_Y:
+            {
+                int mouse_y;
+                SDL_GetMouseState(NULL, &mouse_y);
+                reg_a = mouse_y;
+                break;
+            }
+            case SYSCALL_ID_WINDOW_GET_KEY_STATE:
+            {
+                reg_a = SDL_GetKeyboardState(NULL)[reg_b];
                 break;
             }
         }
@@ -585,7 +699,7 @@ private:
                 uint8_t syscall_id = program[reg_instruction_ptr + 1];
 
                 #if PRINT_DEBUG
-                std::cout << "INSTRUCTION: SYSCALL id " << syscall_id << "\n";
+                std::cout << "INSTRUCTION: SYSCALL id " << (int)syscall_id << "\n";
                 #endif
                 
                 dispatch_syscall(syscall_id);
@@ -691,16 +805,22 @@ private:
 
     std::vector<uint8_t> program;
 
+    std::vector<VirtualWindow> windows;
+
 };
 
 int main(int argc, char** argv)
 {
     if (argc < 2) return 1;
 
+    if (SDL_Init(SDL_INIT_VIDEO)) return 1;
+
     VirtualMachine virtual_machine;
     virtual_machine.load_program(argv[1]);
 
     virtual_machine.run();
+
+    SDL_Quit();
 
     return 0;
 }

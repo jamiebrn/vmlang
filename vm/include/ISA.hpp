@@ -1,5 +1,7 @@
 #pragma once
 
+#define ISA_version 1
+
 #define INSTR_LOAD 0x00
 #define INSTR_LOAD_STR "load"
 
@@ -39,16 +41,16 @@
 #define INSTR_SHR 0x39
 #define INSTR_SHR_STR "shr"
 
-#define INSTR_AND 0x26
+#define INSTR_AND 0x3A
 #define INSTR_AND_STR "and"
 
-#define INSTR_OR 0x27
+#define INSTR_OR 0x3B
 #define INSTR_OR_STR "or"
 
-#define INSTR_XOR 0x28
+#define INSTR_XOR 0x3C
 #define INSTR_XOR_STR "xor"
 
-#define INSTR_NOT 0x29
+#define INSTR_NOT 0x3D
 #define INSTR_NOT_STR "not"
 
 #define INSTR_FADD 0x40

@@ -6,6 +6,9 @@
 #include <cmath>
 
 #include "ISA.hpp"
+#include "syscall.hpp"
+
+// TODO: Enforce per-instruction token patterns
 
 static const std::unordered_map<std::string, uint8_t> reg_name_map = {
     {"ax", 0}, {"bx", 1}, {"cx", 2}, {"dx", 3}, {"fax", 4}, {"fbx", 5}, {"fcx", 6}
@@ -342,12 +345,14 @@ int main(int argv, char** argc)
 {
     if (argv < 2) return 1;
 
-    std::vector<Token> tokens = parse_tokens_from_file(argc[1]);
+    std::string filepath(argc[1]);
+    std::vector<Token> tokens = parse_tokens_from_file(filepath);
 
     std::vector<uint8_t> bytecode(tokens.size() * 4, 0);
 
-    // 8 bytes for program start addr (4) and data size (4)
-    uint32_t bytecode_top_ptr = 8;
+    // 16 bytes for header
+    const uint32_t BYTECODE_HEADER_SIZE = 16;
+    uint32_t bytecode_top_ptr = BYTECODE_HEADER_SIZE;
 
     std::unordered_map<std::string, uint32_t> data_ptrs;
 
@@ -383,7 +388,7 @@ int main(int argv, char** argc)
                 }
 
                 // Program will be loaded in from 0 memory in VM, subtract header
-                data_ptrs[token.text] = bytecode_top_ptr - 8;
+                data_ptrs[token.text] = bytecode_top_ptr - BYTECODE_HEADER_SIZE;
                 break;
             }
             case TokenType::StringLiteral:
@@ -402,7 +407,7 @@ int main(int argv, char** argc)
         }
     }
 
-    size_t data_size = bytecode_top_ptr - 8;
+    size_t data_size = bytecode_top_ptr - BYTECODE_HEADER_SIZE;
 
     std::unordered_map<std::string, uint32_t> label_ptrs;
     std::unordered_map<std::string, std::vector<uint32_t>> label_ref_ptrs;
@@ -431,7 +436,7 @@ int main(int argv, char** argc)
     }
 
     data_mode = false;
-    for (size_t token_idx = 0; token_idx < tokens.size();)
+    for (size_t token_idx = 0; token_idx < tokens.size(); token_idx++)
     {
         const Token& token = tokens[token_idx];
 
@@ -441,8 +446,6 @@ int main(int argv, char** argc)
             {
                 data_mode = false;
             }
-
-            token_idx++;
             continue;
         }
 
@@ -452,7 +455,6 @@ int main(int argv, char** argc)
             {
                 label_ptrs[token.text] = bytecode_top_ptr;
 
-                token_idx++;
                 break;
             }
             case TokenType::Instruction:
@@ -460,7 +462,6 @@ int main(int argv, char** argc)
                 bytecode[bytecode_top_ptr] = token.instruction;
 
                 bytecode_top_ptr++;
-                token_idx++;
                 break;
             }
             case TokenType::Register:
@@ -468,7 +469,6 @@ int main(int argv, char** argc)
                 bytecode[bytecode_top_ptr] = token.reg_id;
 
                 bytecode_top_ptr++;
-                token_idx++;
                 break;
             }
             case TokenType::IntLiteral:
@@ -477,7 +477,6 @@ int main(int argv, char** argc)
                 memcpy(&bytecode[bytecode_top_ptr], &token.value, 4);
                 
                 bytecode_top_ptr += 4;
-                token_idx++;
                 break;
             }
             case TokenType::Unknown:
@@ -487,7 +486,7 @@ int main(int argv, char** argc)
                 {
                     label_ref_ptrs[token.text].push_back(bytecode_top_ptr);
                     bytecode_top_ptr += 4;
-                    token_idx++;
+
                     break;
                 }
                 
@@ -496,7 +495,7 @@ int main(int argv, char** argc)
                 {
                     memcpy(&bytecode[bytecode_top_ptr], &data_ptrs.at(token.text), 4);
                     bytecode_top_ptr += 4;
-                    token_idx++;
+
                     break;
                 }
                 
@@ -525,11 +524,39 @@ int main(int argv, char** argc)
         }
     }
 
-    // Store entry point
-    memcpy(&bytecode[0], &label_ptrs.at("main"), 4);
-    memcpy(&bytecode[4], &data_size, 4);
+    // Store ISA and syscall versions
+    uint32_t isa_ver = ISA_version;
+    uint32_t syscall_ver = SYSCALL_version;
+    memcpy(&bytecode[0], &isa_ver, 4);
+    memcpy(&bytecode[4], &syscall_ver, 4);
 
-    std::ofstream out_file("out.vmex", std::ios::binary);
+    // Store entry point and data size
+    memcpy(&bytecode[8], &label_ptrs.at("main"), 4);
+    memcpy(&bytecode[12], &data_size, 4);
+
+    // Get input file name
+    int dir_idx = -1;
+    int extension_idx = -1;
+    for (int i = 0; i < filepath.length(); i++)
+    {
+        if (filepath[i] == '\\' || filepath[i] == '/')
+        {
+            dir_idx = i + 1;
+        }
+        else if (filepath[i] == '.')
+        {
+            extension_idx = i;
+        }
+    }
+
+    if (dir_idx < 0) dir_idx = 0;
+    if (extension_idx <= dir_idx) extension_idx = filepath.length() - 1;
+
+    std::string out_filepath = filepath.substr(dir_idx, extension_idx - dir_idx) + ".vmex";
+
+    std::cout << "Assembled file \"" << out_filepath << "\"\n";
+
+    std::ofstream out_file(out_filepath, std::ios::binary);
     for (uint32_t i = 0; i < bytecode_top_ptr; i++)
     {
         out_file << bytecode[i];
