@@ -8,12 +8,11 @@
 
 #include "ISA.hpp"
 #include "syscall.hpp"
+#include "bytes.hpp"
 
 #define MACHINE_STACK_SIZE 2 * 1024 * 1024
 
 #define PRINT_DEBUG 0
-
-// TODO: Make endianness host platform agnostic (stop using memcpy)
 
 struct VirtualWindow
 {
@@ -52,8 +51,8 @@ public:
 
     void run()
     {
-        uint32_t binary_isa_ver = *(uint32_t*)&program[0];
-        uint32_t binary_syscall_ver = *(uint32_t*)&program[4];
+        uint32_t binary_isa_ver = load_int(&program[0]);
+        uint32_t binary_syscall_ver = load_int(&program[4]);
 
         if (binary_isa_ver != ISA_version)
         {
@@ -68,10 +67,10 @@ public:
                 binary_syscall_ver << "\n Runtime SYSCALL: " << SYSCALL_version << "\n";
         }
 
-        reg_instruction_ptr = *(uint32_t*)&program[8];
+        reg_instruction_ptr = load_int(&program[8]);
         std::fill(memory.begin(), memory.end(), 0);
         
-        uint32_t program_data_size = *(uint32_t*)&program[12];
+        uint32_t program_data_size = load_int(&program[12]);
         
         // Load program data
         memcpy(&memory[0], &program[16], program_data_size);
@@ -237,7 +236,7 @@ private:
             {
                 uint8_t reg_id = program[reg_instruction_ptr + 1];
                 uint8_t addr_reg_id = program[reg_instruction_ptr + 2];
-                memcpy(get_register(reg_id), &memory[*(uint32_t*)get_register(addr_reg_id)], 4);
+                *(uint32_t*)get_register(reg_id) = load_int(&memory[*(uint32_t*)get_register(addr_reg_id)]);
                 reg_instruction_ptr += 3;
 
                 #if PRINT_DEBUG
@@ -250,7 +249,7 @@ private:
             {
                 uint8_t reg_id = program[reg_instruction_ptr + 1];
                 int32_t offset = *(int32_t*)&program[reg_instruction_ptr + 2];
-                memcpy(get_register(reg_id), &memory[reg_base_ptr + offset], 4);
+                *(uint32_t*)get_register(reg_id) = load_int(&memory[reg_base_ptr + offset]);
                 reg_instruction_ptr += 6;
 
                 #if PRINT_DEBUG
@@ -262,8 +261,8 @@ private:
             case INSTR_LOADC:
             {
                 uint8_t reg_id = program[reg_instruction_ptr + 1];
-                uint32_t value = *(uint32_t*)&program[reg_instruction_ptr + 2];
-                memcpy(get_register(reg_id), &value, 4);
+                uint32_t value = load_int(&program[reg_instruction_ptr + 2]);
+                *(uint32_t*)get_register(reg_id) = value;
                 reg_instruction_ptr += 6;
 
                 #if PRINT_DEBUG
@@ -277,7 +276,7 @@ private:
                 uint8_t reg_id = program[reg_instruction_ptr + 1];
                 uint8_t addr_reg_id = program[reg_instruction_ptr + 2];
                 uint32_t addr = *(uint32_t*)get_register(addr_reg_id);
-                memcpy(&memory[addr], get_register(reg_id), 4);
+                write_int(&memory[addr], *(uint32_t*)get_register(reg_id));
                 reg_instruction_ptr += 3;
 
                 #if PRINT_DEBUG
@@ -289,8 +288,8 @@ private:
             case INSTR_STORES:
             {
                 uint8_t reg_id = program[reg_instruction_ptr + 1];
-                uint32_t addr = reg_base_ptr + *(int32_t*)&program[reg_instruction_ptr + 2];
-                memcpy(&memory[addr], get_register(reg_id), 4);
+                uint32_t addr = reg_base_ptr + load_int(&program[reg_instruction_ptr + 2]);
+                write_int(&memory[addr], *(uint32_t*)get_register(reg_id));
                 reg_instruction_ptr += 6;
 
                 #if PRINT_DEBUG
@@ -636,7 +635,7 @@ private:
             case INSTR_PUSH:
             {
                 uint8_t reg_id = program[reg_instruction_ptr + 1];
-                memcpy(&memory[reg_stack_ptr], get_register(reg_id), 4);
+                write_int(&memory[reg_stack_ptr], *(uint32_t*)get_register(reg_id));
                 reg_stack_ptr += 4;
 
                 reg_instruction_ptr += 2;
@@ -651,7 +650,7 @@ private:
             {
                 uint8_t reg_id = program[reg_instruction_ptr + 1];
                 reg_stack_ptr -= 4;
-                memcpy(get_register(reg_id), &memory[reg_stack_ptr], 4);
+                *(uint32_t*)get_register(reg_id) = load_int(&memory[reg_stack_ptr]);
 
                 reg_instruction_ptr += 2;
 
@@ -663,13 +662,13 @@ private:
             }
             case INSTR_CALL:
             {
-                uint32_t instr = *(uint32_t*)&program[reg_instruction_ptr + 1];
+                uint32_t instr = load_int(&program[reg_instruction_ptr + 1]);
                 uint32_t reg_instruction_ptr_next = reg_instruction_ptr + 5;
 
-                memcpy(&memory[reg_stack_ptr], &reg_instruction_ptr_next, 4);
+                write_int(&memory[reg_stack_ptr], reg_instruction_ptr_next);
                 reg_stack_ptr += 4;
 
-                memcpy(&memory[reg_stack_ptr], &reg_base_ptr, 4);
+                write_int(&memory[reg_stack_ptr], reg_base_ptr);
                 reg_stack_ptr += 4;
 
                 reg_base_ptr = reg_stack_ptr - 8;
@@ -685,8 +684,8 @@ private:
             case INSTR_RET:
             {
                 reg_stack_ptr = reg_base_ptr;
-                reg_instruction_ptr = *(uint32_t*)&memory[reg_stack_ptr];
-                reg_base_ptr = *(uint32_t*)&memory[reg_stack_ptr + 4];
+                reg_instruction_ptr = load_int(&memory[reg_stack_ptr]);
+                reg_base_ptr = load_int(&memory[reg_stack_ptr + 4]);
 
                 #if PRINT_DEBUG
                 std::cout << "INSTRUCTION: RET\n";
@@ -721,7 +720,7 @@ private:
             }
             case INSTR_JMP:
             {
-                uint32_t addr = *(uint32_t*)&program[reg_instruction_ptr + 1];
+                uint32_t addr = load_int(&program[reg_instruction_ptr + 1]);
                 reg_instruction_ptr = addr;
 
                 #if PRINT_DEBUG
@@ -738,7 +737,7 @@ private:
                     break;
                 }
 
-                uint32_t addr = *(uint32_t*)&program[reg_instruction_ptr + 1];
+                uint32_t addr = load_int(&program[reg_instruction_ptr + 1]);
                 reg_instruction_ptr = addr;
 
                 #if PRINT_DEBUG
@@ -755,7 +754,7 @@ private:
                     break;
                 }
 
-                uint32_t addr = *(uint32_t*)&program[reg_instruction_ptr + 1];
+                uint32_t addr = load_int(&program[reg_instruction_ptr + 1]);
                 reg_instruction_ptr = addr;
 
                 #if PRINT_DEBUG
@@ -772,7 +771,7 @@ private:
                     break;
                 }
 
-                uint32_t addr = *(uint32_t*)&program[reg_instruction_ptr + 1];
+                uint32_t addr = load_int(&program[reg_instruction_ptr + 1]);
                 reg_instruction_ptr = addr;
 
                 #if PRINT_DEBUG

@@ -7,8 +7,38 @@
 
 #include "ISA.hpp"
 #include "syscall.hpp"
+#include "bytes.hpp"
 
-// TODO: Enforce per-instruction token patterns
+enum class TokenType
+{
+    Unknown,
+
+    DataDirective,
+    ProgramDirective,
+
+    Label,
+    Instruction,
+    Register,
+    IntLiteral,
+    HexLiteral,
+    StringLiteral
+};
+
+struct Token
+{
+    TokenType type;
+
+    union
+    {
+        uint8_t instruction;
+        uint8_t reg_id;
+        uint32_t value;
+    };
+
+    std::string text;
+
+    int line;
+};
 
 static const std::unordered_map<std::string, uint8_t> reg_name_map = {
     {"ax", 0}, {"bx", 1}, {"cx", 2}, {"dx", 3}, {"fax", 4}, {"fbx", 5}, {"fcx", 6}
@@ -27,6 +57,43 @@ static const std::unordered_map<std::string, uint8_t> instruction_name_map = {
     {INSTR_SYSCALL_STR, INSTR_SYSCALL},
     {INSTR_STOP_STR, INSTR_STOP},
     {INSTR_JMP_STR, INSTR_JMP}, {INSTR_JMPZ_STR, INSTR_JMPZ}, {INSTR_JMPS_STR, INSTR_JMPS}, {INSTR_JMPC_STR, INSTR_JMPC}
+};
+
+static const std::unordered_map<uint8_t, std::vector<std::vector<TokenType>>> instruction_token_patterns = {
+    {INSTR_LOAD, {{TokenType::Register, TokenType::Register}}},
+    {INSTR_LOADS, {{TokenType::Register, TokenType::IntLiteral}, {TokenType::Register, TokenType::HexLiteral}}},
+    {INSTR_LOADC, {{TokenType::Register, TokenType::IntLiteral}, {TokenType::Register, TokenType::HexLiteral}, {TokenType::Register, TokenType::Unknown}}},
+    {INSTR_STORE, {{TokenType::Register, TokenType::Register}}},
+    {INSTR_STORES, {{TokenType::Register, TokenType::IntLiteral}, {TokenType::Register, TokenType::HexLiteral}}},
+    {INSTR_COPY, {{TokenType::Register, TokenType::Register}}},
+    {INSTR_ADD, {{TokenType::Register, TokenType::Register}}},
+    {INSTR_SUB, {{TokenType::Register, TokenType::Register}}},
+    {INSTR_MUL, {{TokenType::Register, TokenType::Register}}},
+    {INSTR_DIV, {{TokenType::Register, TokenType::Register}}},
+    {INSTR_IDIV, {{TokenType::Register, TokenType::Register}}},
+    {INSTR_SHL, {{TokenType::Register, TokenType::Register}}},
+    {INSTR_SHR, {{TokenType::Register, TokenType::Register}}},
+    {INSTR_AND, {{TokenType::Register, TokenType::Register}}},
+    {INSTR_OR, {{TokenType::Register, TokenType::Register}}},
+    {INSTR_XOR, {{TokenType::Register, TokenType::Register}}},
+    {INSTR_NOT, {{TokenType::Register}}},
+    {INSTR_FADD, {{TokenType::Register, TokenType::Register}}},
+    {INSTR_FSUB, {{TokenType::Register, TokenType::Register}}},
+    {INSTR_FMUL, {{TokenType::Register, TokenType::Register}}},
+    {INSTR_FDIV, {{TokenType::Register, TokenType::Register}}},
+    {INSTR_CMP, {{TokenType::Register, TokenType::Register}}},
+    {INSTR_CMPI, {{TokenType::Register, TokenType::Register}}},
+    {INSTR_CMPF, {{TokenType::Register, TokenType::Register}}},
+    {INSTR_PUSH, {{TokenType::Register}}},
+    {INSTR_POP, {{TokenType::Register}}},
+    {INSTR_CALL, {{TokenType::Unknown}}},
+    {INSTR_RET, {}},
+    {INSTR_SYSCALL, {{TokenType::IntLiteral}, {TokenType::HexLiteral}}},
+    {INSTR_STOP, {}},
+    {INSTR_JMP, {{TokenType::Unknown}}},
+    {INSTR_JMPZ, {{TokenType::Unknown}}},
+    {INSTR_JMPS, {{TokenType::Unknown}}},
+    {INSTR_JMPC, {{TokenType::Unknown}}},
 };
 
 char to_lower(char c)
@@ -137,37 +204,6 @@ bool is_token_program_directive(const std::string& token)
 {
     return token == "[program]";
 }
-
-enum class TokenType
-{
-    Unknown,
-
-    DataDirective,
-    ProgramDirective,
-
-    Label,
-    Instruction,
-    Register,
-    IntLiteral,
-    HexLiteral,
-    StringLiteral
-};
-
-struct Token
-{
-    TokenType type;
-
-    union
-    {
-        uint8_t instruction;
-        uint8_t reg_id;
-        uint32_t value;
-    };
-
-    std::string text;
-
-    int line;
-};
 
 Token create_token(const std::string& text, int line)
 {
@@ -341,6 +377,33 @@ std::vector<Token> parse_tokens_from_file(std::string filepath)
     return tokens;
 }
 
+bool instruction_token_has_valid_pattern(const std::vector<Token>& tokens, int index)
+{
+    const Token& token = tokens.at(index);
+
+    const std::vector<std::vector<TokenType>>& patterns = instruction_token_patterns.at(token.instruction);
+    if (patterns.size() <= 0) return true;
+
+    for (const std::vector<TokenType>& pattern : patterns)
+    {
+        if (index + pattern.size() >= tokens.size()) continue;
+        
+        bool valid = true;
+        for (int i = 0; i < pattern.size(); i++)
+        {
+            if (tokens.at(index + i + 1).type != pattern.at(i))
+            {
+                valid = false;
+                break;
+            }
+        }
+
+        if (valid) return true;
+    }
+
+    return false;
+}
+
 int main(int argv, char** argc)
 {
     if (argv < 2) return 1;
@@ -400,8 +463,8 @@ int main(int argv, char** argc)
             case TokenType::IntLiteral:
             case TokenType::HexLiteral: // fallthrough
             {
-                memcpy(&bytecode[bytecode_top_ptr], &token.value, 4);
-                bytecode_top_ptr += token.text.length() + 4;
+                write_int(&bytecode[bytecode_top_ptr], token.value);
+                bytecode_top_ptr += 4;
                 break;
             }
         }
@@ -459,6 +522,12 @@ int main(int argv, char** argc)
             }
             case TokenType::Instruction:
             {
+                if (!instruction_token_has_valid_pattern(tokens, token_idx))
+                {
+                    std::cout << "\nERROR: Could not assemble program - invalid instruction pattern on line " << token.line << "\n";
+                    return 1;
+                }
+
                 bytecode[bytecode_top_ptr] = token.instruction;
 
                 bytecode_top_ptr++;
@@ -474,7 +543,7 @@ int main(int argv, char** argc)
             case TokenType::IntLiteral:
             case TokenType::HexLiteral: // fallthrough
             {
-                memcpy(&bytecode[bytecode_top_ptr], &token.value, 4);
+                write_int(&bytecode[bytecode_top_ptr], token.value);
                 
                 bytecode_top_ptr += 4;
                 break;
@@ -493,7 +562,7 @@ int main(int argv, char** argc)
                 // Test if data ptr
                 if (data_ptrs.contains(token.text))
                 {
-                    memcpy(&bytecode[bytecode_top_ptr], &data_ptrs.at(token.text), 4);
+                    write_int(&bytecode[bytecode_top_ptr], data_ptrs.at(token.text));
                     bytecode_top_ptr += 4;
 
                     break;
@@ -520,19 +589,19 @@ int main(int argv, char** argc)
 
         for (uint32_t ref : refs)
         {
-            memcpy(&bytecode[ref], &label_ptr, 4);
+            write_int(&bytecode[ref], label_ptr);
         }
     }
 
     // Store ISA and syscall versions
     uint32_t isa_ver = ISA_version;
     uint32_t syscall_ver = SYSCALL_version;
-    memcpy(&bytecode[0], &isa_ver, 4);
-    memcpy(&bytecode[4], &syscall_ver, 4);
+    write_int(&bytecode[0], isa_ver);
+    write_int(&bytecode[4], syscall_ver);
 
     // Store entry point and data size
-    memcpy(&bytecode[8], &label_ptrs.at("main"), 4);
-    memcpy(&bytecode[12], &data_size, 4);
+    write_int(&bytecode[8], label_ptrs.at("main"));
+    write_int(&bytecode[12], data_size);
 
     // Get input file name
     int dir_idx = -1;
