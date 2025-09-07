@@ -3,7 +3,8 @@
 const std::unordered_map<uint8_t, std::vector<std::vector<TokenType>>> instruction_token_patterns = {
     {INSTR_LOAD, {{TokenType::Register, TokenType::Register}}},
     {INSTR_LOADS, {{TokenType::Register, TokenType::IntLiteral}, {TokenType::Register, TokenType::HexLiteral}}},
-    {INSTR_LOADC, {{TokenType::Register, TokenType::IntLiteral}, {TokenType::Register, TokenType::HexLiteral}, {TokenType::Register, TokenType::Unknown}}},
+    {INSTR_LOADC, {{TokenType::Register, TokenType::IntLiteral}, {TokenType::Register, TokenType::HexLiteral},
+        {TokenType::Register, TokenType::FloatLiteral}, {TokenType::Register, TokenType::Unknown}}},
     {INSTR_STORE, {{TokenType::Register, TokenType::Register}}},
     {INSTR_STORES, {{TokenType::Register, TokenType::IntLiteral}, {TokenType::Register, TokenType::HexLiteral}}},
     {INSTR_COPY, {{TokenType::Register, TokenType::Register}}},

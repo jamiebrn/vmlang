@@ -145,6 +145,13 @@ bool _token_instruction_pass(const std::vector<Token>& tokens, std::vector<uint8
                 bytecode_top_ptr += 4;
                 break;
             }
+            case TokenType::FloatLiteral:
+            {
+                write_int(&bytecode[bytecode_top_ptr], token.fvalue);
+                
+                bytecode_top_ptr += 4;
+                break;
+            }
             case TokenType::Unknown:
             {
                 // Test if label
@@ -199,10 +206,8 @@ void _write_label_refs(std::vector<uint8_t>& bytecode, const std::unordered_map<
 void _write_header(std::vector<uint8_t>& bytecode, const std::unordered_map<std::string, uint32_t>& label_ptrs, uint32_t data_size)
 {
     // Store ISA and syscall versions
-    uint32_t isa_ver = ISA_version;
-    uint32_t syscall_ver = SYSCALL_version;
-    write_int(&bytecode[0], isa_ver);
-    write_int(&bytecode[4], syscall_ver);
+    write_int(&bytecode[0], ISA_version);
+    write_int(&bytecode[4], SYSCALL_version);
 
     // Store entry point and data size
     write_int(&bytecode[8], label_ptrs.at("main"));
