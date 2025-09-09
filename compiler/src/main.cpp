@@ -87,6 +87,45 @@ void print_expression(ExpressionNode* node, int depth = 0)
     }
 }
 
+void print_assembly_from_expression(ExpressionNode* node, int depth = 0)
+{
+    if (!node->is_operator)
+    {
+        std::cout << "  loadc   ax    " << node->value << "\n";
+        std::cout << "  push    ax\n";
+        return;
+    }
+
+    print_assembly_from_expression(node->right, depth + 1);
+    print_assembly_from_expression(node->left, depth + 1);
+
+    std::cout << "  pop     ax\n";
+    std::cout << "  pop     bx\n";
+    
+    if (node->value == "+")
+    {
+        std::cout << "  add     ";
+    }
+    else if (node->value == "-")
+    {
+        std::cout << "  sub     ";
+    }
+    else if (node->value == "*")
+    {
+        std::cout << "  mul     ";
+    }
+    else if (node->value == "/")
+    {
+        std::cout << "  div     ";
+    }
+
+    std::cout << "ax    bx\n";
+    if (depth > 0)
+    {
+        std::cout << "  push    ax\n";
+    }
+}
+
 int evaluate_expression(ExpressionNode* node)
 {
     if (!node->is_operator)
@@ -190,6 +229,9 @@ int main()
         size_t idx = 0;
         ExpressionNode* expression = parse_expression(tokens, idx, 0);
         print_expression(expression);
-        printf("= %d\n", evaluate_expression(expression));
+        std::cout << "= " << evaluate_expression(expression) << "\n";
+
+        std::cout << "\nvASM:\n";
+        print_assembly_from_expression(expression);
     }
 }

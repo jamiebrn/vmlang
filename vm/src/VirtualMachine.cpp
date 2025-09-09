@@ -640,7 +640,7 @@ void VirtualMachine::process_instruction()
             reg_instruction_ptr += 2;
 
             #if PRINT_DEBUG
-            std::cout << "INSTRUCTION: POP\n";
+            std::cout << "INSTRUCTION: POP value " << *(uint32_t*)get_register(reg_id) << " into reg " << (int)reg_id << "\n";
             #endif
 
             break;
