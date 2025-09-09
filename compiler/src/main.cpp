@@ -33,9 +33,21 @@ ExpressionNode* parse_expression(const std::vector<Token>& tokens, size_t& idx, 
     left->value = tokens[idx].value;
     idx++;
 
+    if (left->value == "(")
+    {
+        delete left;
+        left = parse_expression(tokens, idx, 0);
+    }
+
     while (idx < tokens.size())
     {
         const Token& op = tokens[idx];
+        if (op.value == ")")
+        {
+            idx++;
+            break;
+        }
+
         uint8_t prec = operator_precedence.at(op.value);
 
         if (prec <= precedence_level) break;
@@ -59,7 +71,12 @@ void print_expression(ExpressionNode* node, int depth = 0)
 {
     if (depth > 0)
     {
-        std::cout << std::string(depth, '|');
+        if (depth > 1)
+        {
+            std::cout << '|';
+            std::cout << std::string((depth - 1) * 3 - 1, ' ');
+        }
+        std::cout << "\'- ";
     }
     std::cout << node->value << "\n";
 
@@ -96,17 +113,24 @@ int evaluate_expression(ExpressionNode* node)
     return 0;
 }
 
-Token create_token(const std::string token_buffer)
+bool is_num(char c)
+{
+    return c >= '0' && c <= '9';
+}
+
+bool is_operator(char c)
+{
+    return (c == '+' || c == '-' || c == '*' || c == '/' || c == '(' || c == ')');
+}
+
+Token create_token(std::string token_buffer)
 {
     Token token;
-    if (token_buffer.size() == 1)
+    if (token_buffer.size() == 1 && is_operator(token_buffer[0]))
     {
-        if (token_buffer == "+" || token_buffer == "-" || token_buffer == "*" || token_buffer == "/")
-        {
-            token.type = TokenType::Operator;
-            token.value = token_buffer;
-            return token;
-        }
+        token.type = TokenType::Operator;
+        token.value = token_buffer;
+        return token;
     }
 
     token.type = TokenType::Value;
@@ -114,31 +138,33 @@ Token create_token(const std::string token_buffer)
     return token;
 }
 
+
 std::vector<Token> parse_tokens(const std::string& expression)
 {
     int i = 0;
-    std::string token_buffer;
     std::vector<Token> tokens;
     while (i < expression.size())
     {
-        if (expression[i] == ' ')
+        char c = expression[i];
+        if (is_operator(c))
         {
-            if (token_buffer.size() > 0)
+            tokens.push_back(create_token(std::string(1, c)));
+            i++;
+            continue;
+        }
+        else if (is_num(c))
+        {
+            std::string token_buffer;
+            while (is_num(expression[i]))
             {
-                tokens.push_back(create_token(token_buffer));
-                token_buffer.clear();
+                token_buffer += expression[i];
+                i++;
             }
-            while (expression[i] == ' ') i++;
+            tokens.push_back(create_token(token_buffer));
+            continue;
         }
 
-        token_buffer += expression[i];
-        i++;
-    }
-
-    if (token_buffer.size() > 0)
-    {
-        tokens.push_back(create_token(token_buffer));
-        token_buffer.clear();
+        while (!is_operator(expression[i]) && !is_num(expression[i])) i++;
     }
 
     return tokens;
@@ -155,10 +181,15 @@ int main()
         if (input.empty()) break;
 
         std::vector<Token> tokens = parse_tokens(input);
-    
+        // for (const Token& token : tokens)
+        // {
+        //     std::cout << token.value << "\n";
+        // }
+        // std::cout << "\n";
+
         size_t idx = 0;
         ExpressionNode* expression = parse_expression(tokens, idx, 0);
-        // print_expression(expression);
-        printf("%d\n", evaluate_expression(expression));
+        print_expression(expression);
+        printf("= %d\n", evaluate_expression(expression));
     }
 }
