@@ -2,6 +2,7 @@
 #include <string>
 #include <iostream>
 #include <vector>
+#include <memory>
 #include <stdint.h>
 
 enum TokenType
@@ -23,19 +24,18 @@ struct ExpressionNode
     bool is_operator = false;
     std::string value;
 
-    ExpressionNode* left = nullptr;
-    ExpressionNode* right = nullptr;
+    std::unique_ptr<ExpressionNode> left = nullptr;
+    std::unique_ptr<ExpressionNode> right = nullptr;
 };
 
-ExpressionNode* parse_expression(const std::vector<Token>& tokens, size_t& idx, uint8_t precedence_level)
+std::unique_ptr<ExpressionNode> parse_expression(const std::vector<Token>& tokens, size_t& idx, uint8_t precedence_level)
 {
-    ExpressionNode* left = new ExpressionNode;
+    std::unique_ptr<ExpressionNode> left = std::make_unique<ExpressionNode>();
     left->value = tokens[idx].value;
     idx++;
 
     if (left->value == "(")
     {
-        delete left;
         left = parse_expression(tokens, idx, 0);
     }
 
@@ -54,14 +54,12 @@ ExpressionNode* parse_expression(const std::vector<Token>& tokens, size_t& idx, 
 
         idx++;
 
-        ExpressionNode* right = parse_expression(tokens, idx, prec);
-
-        ExpressionNode* new_node = new ExpressionNode;
+        std::unique_ptr<ExpressionNode> new_node = std::make_unique<ExpressionNode>();
         new_node->is_operator = true;
         new_node->value = op.value;
-        new_node->left = left;
-        new_node->right = right;
-        left = new_node;
+        new_node->left = std::move(left);
+        new_node->right = parse_expression(tokens, idx, prec);
+        left = std::move(new_node);
     }
 
     return left;
@@ -82,8 +80,8 @@ void print_expression(ExpressionNode* node, int depth = 0)
 
     if (node->is_operator)
     {
-        print_expression(node->left, depth + 1);
-        print_expression(node->right, depth + 1);
+        print_expression(node->left.get(), depth + 1);
+        print_expression(node->right.get(), depth + 1);
     }
 }
 
@@ -96,8 +94,8 @@ void print_assembly_from_expression(ExpressionNode* node, int depth = 0)
         return;
     }
 
-    print_assembly_from_expression(node->right, depth + 1);
-    print_assembly_from_expression(node->left, depth + 1);
+    print_assembly_from_expression(node->right.get(), depth + 1);
+    print_assembly_from_expression(node->left.get(), depth + 1);
 
     std::cout << "  pop     ax\n";
     std::cout << "  pop     bx\n";
@@ -135,19 +133,19 @@ int evaluate_expression(ExpressionNode* node)
 
     if (node->value == "+")
     {
-        return evaluate_expression(node->left) + evaluate_expression(node->right);
+        return evaluate_expression(node->left.get()) + evaluate_expression(node->right.get());
     }
     if (node->value == "-")
     {
-        return evaluate_expression(node->left) - evaluate_expression(node->right);
+        return evaluate_expression(node->left.get()) - evaluate_expression(node->right.get());
     }
     if (node->value == "*")
     {
-        return evaluate_expression(node->left) * evaluate_expression(node->right);
+        return evaluate_expression(node->left.get()) * evaluate_expression(node->right.get());
     }
     if (node->value == "/")
     {
-        return evaluate_expression(node->left) / evaluate_expression(node->right);
+        return evaluate_expression(node->left.get()) / evaluate_expression(node->right.get());
     }
     return 0;
 }
@@ -227,11 +225,11 @@ int main()
         // std::cout << "\n";
 
         size_t idx = 0;
-        ExpressionNode* expression = parse_expression(tokens, idx, 0);
-        print_expression(expression);
-        std::cout << "= " << evaluate_expression(expression) << "\n";
+        std::unique_ptr<ExpressionNode> expression = parse_expression(tokens, idx, 0);
+        print_expression(expression.get());
+        std::cout << "= " << evaluate_expression(expression.get()) << "\n";
 
         std::cout << "\nvASM:\n";
-        print_assembly_from_expression(expression);
+        print_assembly_from_expression(expression.get());
     }
 }
